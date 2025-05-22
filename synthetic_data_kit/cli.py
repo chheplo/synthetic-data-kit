@@ -49,30 +49,53 @@ def system_check(
         None, "--api-base", help="API base URL to check"
     ),
     provider: Optional[str] = typer.Option(
-        None, "--provider", help="Provider to check ('vllm' or 'openai')"
+        None, "--provider", help="Provider to check ('vllm' or 'api-endpoint')"
     )
 ):
     """
     Check if the selected LLM provider's server is running.
     """
+    # Check for LLAMA_API_KEY directly from environment
+    console.print("Environment variable check:", style="bold blue")
+    llama_key = os.environ.get('LLAMA_API_KEY')
+    console.print(f"LLAMA_API_KEY: {'Present' if llama_key else 'Not found'}")
+    # Debugging sanity test:
+    # if llama_key:
+        # console.print(f"  Value starts with: {llama_key[:10]}...")
+    
+    # To check the rename bug:
+    #console.print("Available environment variables:", style="bold blue")
+    #env_vars = [key for key in os.environ.keys() if 'API' in key or 'KEY' in key or 'TOKEN' in key]
+    #for var in env_vars:
+    #    console.print(f"  {var}")
+    #console.print("")
     # Get provider from args or config
     selected_provider = provider or get_llm_provider(ctx.config)
     
-    if selected_provider == "openai":
-        # Get OpenAI config
-        openai_config = get_openai_config(ctx.config)
-        api_base = api_base or openai_config.get("api_base")
-        api_key = openai_config.get("api_key") or os.environ.get("OPENAI_API_KEY")
-        model = openai_config.get("model")
+    if selected_provider == "api-endpoint":
+        # Get API endpoint config
+        api_endpoint_config = get_openai_config(ctx.config)
+        api_base = api_base or api_endpoint_config.get("api_base")
         
-        # Check OpenAI API access
-        with console.status(f"Checking OpenAI API access..."):
+        # Check for environment variables
+        llama_api_key = os.environ.get('LLAMA_API_KEY')
+        console.print(f"LLAMA_API_KEY environment variable: {'Found' if llama_api_key else 'Not found'}")
+        
+        # Set API key with priority: env var > config
+        api_key = llama_api_key or api_endpoint_config.get("api_key")
+        if api_key:
+            console.print(f"API key source: {'Environment variable' if llama_api_key else 'Config file'}")
+        
+        model = api_endpoint_config.get("model")
+        
+        # Check API endpoint access
+        with console.status(f"Checking API endpoint access..."):
             try:
                 # Try to import OpenAI
                 try:
                     from openai import OpenAI
                 except ImportError:
-                    console.print("L OpenAI package not installed", style="red")
+                    console.print("L API endpoint package not installed", style="red")
                     console.print("Install with: pip install openai>=1.0.0", style="yellow")
                     return 1
                 
@@ -88,17 +111,17 @@ def system_check(
                     client = OpenAI(**client_kwargs)
                     # Try a simple models list request to check connectivity
                     models = client.models.list()
-                    console.print(f" OpenAI API access confirmed", style="green")
+                    console.print(f" API endpoint access confirmed", style="green")
                     if api_base:
                         console.print(f"Using custom API base: {api_base}", style="green")
                     console.print(f"Default model: {model}", style="green")
                     return 0
                 except Exception as e:
-                    console.print(f"L Error connecting to OpenAI API: {str(e)}", style="red")
+                    console.print(f"L Error connecting to API endpoint: {str(e)}", style="red")
                     if api_base:
                         console.print(f"Using custom API base: {api_base}", style="yellow")
                     if not api_key and not api_base:
-                        console.print("API key is required. Set in config.yaml or as OPENAI_API_KEY env var", style="yellow")
+                        console.print("API key is required. Set in config.yaml or as LLAMA_API_KEY env var", style="yellow")
                     return 1
             except Exception as e:
                 console.print(f"L Error: {str(e)}", style="red")
@@ -200,12 +223,12 @@ def create(
     # Check the LLM provider from config
     provider = get_llm_provider(ctx.config)
     console.print(f"L Using {provider} provider", style="green")
-    if provider == "openai":
-        # Use OpenAI config
-        openai_config = get_openai_config(ctx.config)
-        api_base = api_base or openai_config.get("api_base")
-        model = model or openai_config.get("model")
-        # No server check needed for OpenAI
+    if provider == "api-endpoint":
+        # Use API endpoint config
+        api_endpoint_config = get_openai_config(ctx.config)
+        api_base = api_base or api_endpoint_config.get("api_base")
+        model = model or api_endpoint_config.get("model")
+        # No server check needed for API endpoint
     else:
         # Use vLLM config
         vllm_config = get_vllm_config(ctx.config)
@@ -278,12 +301,12 @@ def curate(
     # Check the LLM provider from config
     provider = get_llm_provider(ctx.config)
     
-    if provider == "openai":
-        # Use OpenAI config
-        openai_config = get_openai_config(ctx.config)
-        api_base = api_base or openai_config.get("api_base")
-        model = model or openai_config.get("model")
-        # No server check needed for OpenAI
+    if provider == "api-endpoint":
+        # Use API endpoint config
+        api_endpoint_config = get_openai_config(ctx.config)
+        api_base = api_base or api_endpoint_config.get("api_base")
+        model = model or api_endpoint_config.get("model")
+        # No server check needed for API endpoint
     else:
         # Use vLLM config
         vllm_config = get_vllm_config(ctx.config)
